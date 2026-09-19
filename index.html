@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Instagram Non-Followers Checker</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    background: #0d0d0d;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    text-align: center;
+    padding: 60px 16px;
+    margin: 0;
+  }
+  h1 {
+    letter-spacing: 2px;
+    font-size: 1.6rem;
+    margin-bottom: 50px;
+  }
+  h1 small {
+    display: block;
+    font-size: 0.9rem;
+    color: #888;
+    letter-spacing: 0;
+    margin-top: 10px;
+  }
+  #copy-btn {
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    background: #fff;
+    color: #000;
+    font-weight: bold;
+    font-size: 1.2rem;
+    border: 0;
+    cursor: pointer;
+    letter-spacing: 1px;
+  }
+  #copy-btn:active {
+    transform: scale(0.97);
+  }
+  .hint {
+    margin-top: 20px;
+    color: #aaa;
+    font-size: 0.95rem;
+    min-height: 1.4em;
+  }
+  .code-box {
+    max-width: 900px;
+    margin: 40px auto 0;
+    background: #1a1a1a;
+    border-radius: 8px;
+    padding: 14px 18px;
+    text-align: left;
+    overflow-x: auto;
+    font-size: 0.8rem;
+    color: #9cdcfe;
+    white-space: pre;
+    border: 1px solid #333;
+  }
+  footer {
+    margin-top: 60px;
+    color: #555;
+    font-size: 0.8rem;
+  }
+  a {
+    color: #7aa2f7;
+  }
+</style>
+</head>
+<body>
+  <h1>INSTAGRAM NON-FOLLOWERS CHECKER<small>copiá y pegá en la consola de instagram.com (F12)</small></h1>
+
+  <button id="copy-btn">COPY</button>
+  <p class="hint" id="hint">Click para copiar el script al portapapeles</p>
+
+  <div class="code-box" id="preview"></div>
+
+  <script type="text/plain" id="payload">
+(async () => {
+  const cookie = (name) => {
+    const m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return m ? m[2] : null;
+  };
+
+  const userId = cookie('ds_user_id');
+  const csrftoken = cookie('csrftoken');
+  if (!userId || !csrftoken) {
+    alert('No encontré tu sesión. Asegurate de estar logueado en Instagram.');
+    return;
+  }
+
+  const APP_ID = '936619743392459'; // ID público de la app web de Instagram
+  const PAGE_SIZE = 12; // igual al que usa la UI real
+  let wwwClaim = localStorage.getItem('iu2-www-claim') || '0';
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const randSleep = (min, max) => sleep(min + Math.random() * (max - min));
+
+  const igFetch = async (url) => {
+    const res = await fetch(url, {
+      credentials: 'include',
+      headers: {
+        Accept: '*/*',
+        'X-Ig-App-Id': APP_ID,
+        'X-Csrftoken': csrftoken,
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Ig-Www-Claim': wwwClaim,
+      },
+    });
+    const newClaim = res.headers.get('x-ig-set-www-claim');
+    if (newClaim) {
+      wwwClaim = newClaim;
+      localStorage.setItem('iu2-www-claim', newClaim);
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status} en ${url}`);
+    const data = await res.json();
+    if (data.status && data.status !== 'ok') {
+      throw new Error(
+        `Instagram devolvió status "${data.status}" — probablemente te está frenando por actividad sospechosa. Parar y esperar unos días antes de reintentar.`
+      );
+    }
+    return data;
+  };
+
+  const fetchAll = async (kind, onProgress) => {
+    let users = [];
+    let maxId = '';
+    let hasMore = true;
+    let page = 0;
+    while (hasMore) {
+      const url = `https://www.instagram.com/api/v1/friendships/${userId}/${kind}/?count=${PAGE_SIZE}${
+        maxId ? `&max_id=${maxId}` : ''
+      }`;
+      const data = await igFetch(url);
+      users = users.concat(data.users || []);
+      maxId = data.next_max_id;
+      hasMore = !!(data.has_more || data.big_list) && !!maxId;
+      page++;
+      onProgress && onProgress(users.length);
+
+      if (!hasMore) break;
+
+      if (page % 5 === 0) {
+        await randSleep(12000, 18000);
+      } else {
+        await randSleep(1800, 3200);
+      }
+    }
+    return users;
+  };
+
+  document.body.innerHTML =
+    '<div id="iu-status" style="font-family:sans-serif;padding:40px;font-size:20px;color:#333;background:#fff;">Escaneando...</div>';
+  const statusEl = document.getElementById('iu-status');
+
+  try {
+    const followers = await fetchAll(
+      'followers',
+      (n) => (statusEl.textContent = `Escaneando seguidores... (${n})`)
+    );
+
+    await randSleep(6000, 10000);
+
+    const following = await fetchAll(
+      'following',
+      (n) => (statusEl.textContent = `Escaneando a quién seguís... (${n})`)
+    );
+
+    const followerIds = new Set(followers.map((u) => String(u.pk)));
+    const nonFollowers = following.filter((u) => !followerIds.has(String(u.pk)));
+
+    render(nonFollowers);
+  } catch (err) {
+    statusEl.textContent = `Error: ${err.message}`;
+    console.error(err);
+  }
+
+  function render(users) {
+    document.body.style.cssText = 'font-family:sans-serif;background:#111;color:#eee;padding:20px;';
+    document.body.innerHTML = `<h2>No te siguen de vuelta (${users.length})</h2><p style="opacity:.7;font-size:13px;">Recomendado: no dejes de seguir a más de 15-20 por tanda.</p><div id="grid" style="display:flex;flex-wrap:wrap;gap:16px;"></div><button id="unf-btn" style="margin-top:20px;padding:12px 20px;background:#dc2743;color:#fff;border:0;border-radius:8px;cursor:pointer;">Dejar de seguir seleccionados</button>`;
+    const grid = document.getElementById('grid');
+    const selected = new Set();
+
+    users.forEach((u) => {
+      const card = document.createElement('div');
+      card.style.cssText = 'width:110px;text-align:center;cursor:pointer;padding:8px;border-radius:8px;';
+      card.innerHTML = `<img src="${u.profile_pic_url}" style="width:70px;height:70px;border-radius:50%;border:2px solid #555;"><div style="font-size:12px;margin-top:6px;word-break:break-word;">${u.username}</div>`;
+      card.onclick = () => {
+        if (selected.has(u.pk)) {
+          selected.delete(u.pk);
+          card.style.background = 'transparent';
+        } else {
+          selected.add(u.pk);
+          card.style.background = '#333';
+        }
+      };
+      grid.appendChild(card);
+    });
+
+    document.getElementById('unf-btn').onclick = async () => {
+      if (!selected.size) return;
+      if (selected.size > 20 && !confirm(`Vas a dejar de seguir a ${selected.size} cuentas de una — te recomiendo hacer tandas de 15-20 para no levantar sospechas. ¿Seguir igual?`)) return;
+      if (!confirm(`¿Dejar de seguir a ${selected.size} cuentas?`)) return;
+
+      let i = 0;
+      for (const pk of selected) {
+        try {
+          await fetch(`https://www.instagram.com/web/friendships/${pk}/unfollow/`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              'content-type': 'application/x-www-form-urlencoded',
+              'x-csrftoken': csrftoken,
+            },
+          });
+        } catch (e) {
+          console.error('Fallo unfollow', pk, e);
+        }
+        i++;
+        if (i % 5 === 0) {
+          await randSleep(20000, 30000);
+        } else {
+          await randSleep(5000, 9000);
+        }
+      }
+      alert('Listo!');
+    };
+  }
+})();
+  </script>
+
+  <script>
+    const payloadEl = document.getElementById('payload');
+    const payload = payloadEl.textContent.trim();
+    const preview = document.getElementById('preview');
+    const lines = payload.split('\n');
+    preview.textContent = lines.slice(0, 6).join('\n') + '\n...';
+
+    document.getElementById('copy-btn').addEventListener('click', async () => {
+      const hint = document.getElementById('hint');
+      try {
+        await navigator.clipboard.writeText(payload);
+        hint.textContent = '¡Copiado! Ahora pegalo en la consola de instagram.com (F12)';
+      } catch (e) {
+        const ta = document.createElement('textarea');
+        ta.value = payload;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try {
+          document.execCommand('copy');
+          hint.textContent = '¡Copiado! Ahora pegalo en la consola de instagram.com (F12)';
+        } catch (e2) {
+          hint.textContent = 'No se pudo copiar automáticamente, seleccioná el texto de abajo a mano.';
+        }
+        document.body.removeChild(ta);
+      }
+    });
+  </script>
+
+  <footer>
+    Reescrito porque el
+    <a href="https://github.com/agusmoles/instagram-unfollowers" target="_blank" rel="noopener">script original de Agus Moles</a>
+    dejó de funcionar (Instagram deprecó el endpoint que usaba). Código fuente en
+    <a href="https://github.com/ramabattini/unfollowers-instagram" target="_blank" rel="noopener">este repo</a>.
+  </footer>
+</body>
+</html>
