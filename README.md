@@ -2,7 +2,7 @@
 
 Script de consola para ver, dentro de tu propia sesión de Instagram, quiénes seguís que no te siguen de vuelta.
 
-Nace porque el script original de [agusmoles/instagram-unfollowers](https://github.com/agusmoles/instagram-unfollowers) dejó de funcionar: Instagram deprecó el endpoint viejo (`graphql/query?query_hash=...`) que usaba para traer la lista de seguidos. Este script reimplementa la misma idea usando el endpoint web actual (`api/v1/friendships/...`), reverseado a mano inspeccionando la pestaña Network del navegador.
+
 
 ## Uso
 
@@ -27,6 +27,3 @@ Nace porque el script original de [agusmoles/instagram-unfollowers](https://gith
 - Si eso pasa, hay que volver a inspeccionar la pestaña Network del navegador (Followers/Following → filtrar por `Fetch/XHR`) para encontrar la URL y los headers actualizados.
 - No se envía ninguna información a servidores de terceros: todo el tráfico va directo a `instagram.com` usando tu sesión ya logueada en el navegador.
 
-## Créditos
-
-Inspirado en [agusmoles/instagram-unfollowers](https://github.com/agusmoles/instagram-unfollowers).
